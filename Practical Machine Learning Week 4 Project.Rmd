@@ -1,0 +1,237 @@
+---
+title: "Practical Machine Learning Week 4 Project"
+author: "Anonymous"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Executive Summary
+Using the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants derived from the “Human Activity Recognition” (https://www.kaggle.com/datasets/erenaktas/human-activity-recognition)  section on Weight Lifting Exercise Dataset a training set (https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and a test set (https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)  is used to complete the project goals to:
+
+•	Download and explore/analyze the data with the focus of predicting the “classe” variable.
+
+•	Apply different models to determine the model of best fit for prediction of the test data.
+
+•	Describe and determine the model of best fit through cross validation and justify the selection.
+
+•	Calculate the expected out of sample error for each model. 
+
+# Exploratory Data Analysis
+Load the project data and required libraries for analysis.
+
+```{r,eval=FALSE,echol=TRUE}
+str(training_data)}
+```
+
+'data.frame':	19622 obs. of  160 variables
+
+```{r,eval=FALSE,echol=TRUE}
+str(testing_data)}
+```
+
+‘data.frame':	20 obs. of  160 variables
+
+The instructions were “…to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.”
+
+To focus the training data a tidy data set was created to suit the goal of the project.
+The following code identified the “accel” variables and removed other variables except “classe”:
+
+```{r,eval=FALSE,echol=TRUE}
+accel_ident <- grep("accel",names(training_data),value=TRUE)
+training_data_clean <- training_data[,c(accel_ident,"classe")]
+```
+
+This reduced the training data set to 27 variables from the 160.
+It was noted that there are a large percentage of “NA” or blank values for a number of variables.
+
+These columns were identified (> than 50% of the values of NA or blank) and removed from the training data set.
+
+```{r,eval=FALSE,echol=TRUE}
+remove_cols <- which(colSums(is.na(training_data_clean)|training_data_clean=="")>9811)
+training_data_clean_2 <- training_data_clean[,-remove_cols]
+```
+
+# Training Models, “classe” Predictions, Accuracy
+### Using Cross Validation to estimate prediction error
+
+The variable “classe” (nominal data) indicates the manner in which the participant did the exercises.
+
+Training and test sets established. The testing set provided had no “classe” variable. A close approximation of a testing set size as given to be determined to include a "classe" variable from the large Training set.
+
+```{r,eval=FALSE,echol=TRUE}
+set.seed(23456)
+in_train <- createDataPartition(training_data_clean_2$classe, p=0.998, list=FALSE)
+training_final <- training_data_clean_2[in_train,]
+dim(training_final)
+```
+
+19585 observations, 17 variables
+
+## random Forest Model, Prediction, and Accuracy
+
+```{r,eval=FALSE,echol=TRUE}
+library(randomForest)
+model_rf <- train(classe~., data=training_final,method="rf",verbose=FALSE)
+print(model_rf)
+```
+
+#### Summary of output
+
+```{r,eval=FALSE,echol=TRUE}
+19585 samples, 16 predictor, 5 classes: 'A', 'B', 'C', 'D', 'E'
+
+
+mtry    Accuracy    Kappa 
+
+2       0.9442769   0.9294700
+
+9       0.9363293   0.9194195
+
+16      0.9189096   0.8973663
+```
+
+```{r,eval=FALSE,echol=TRUE}
+training_predict_rf <- predict(model_rf,testing_final)
+training_predict_rf
+```
+
+[1] A A A A A A A A A A A B B B B B B B C C C C C C D D D C D D E E E E E E E
+
+Levels: A B C D E
+
+Create and interpret confusionMatrix output.
+
+```{r,eval=FALSE,echol=TRUE}
+training_cm <- confusionMatrix(as.factor(testing_final$classe),training_predict_rf)
+training_cm
+```
+#### Summary of output
+
+ Accuracy : 0.973
+ 
+ 95% CI : (0.8584, 0.9993)
+ 
+ P-Value [Acc > NIR] : < 2.2e-16
+ 
+ Kappa : 0.9657
+ 
+**Out of sample error**: 1 - 0.973 = 0.027
+
+## Generalized Boosted Model (gbm) Model, Prediction, and Accuracy
+
+
+```{r,eval=FALSE,echol=TRUE}
+model_gbm <- train(classe~., data=training_final,method="gbm",verbose=FALSE)
+print(model_gbm)
+```
+#### Summary of output
+```{r,eval=FALSE,echol=TRUE}
+
+19585 samples.  16 predictor, 5 classes: 'A', 'B', 'C', 'D', 'E'
+
+      interaction.depth  n.trees  Accuracy   Kappa  
+      
+1                        50        0.5483365  0.4199780
+
+1                       100        0.6015329  0.4903180
+
+2                       150        0.6341232  0.5327794
+
+2                        50        0.6595826  0.5653230
+
+2                       100        0.7314713  0.6581871
+
+2                       150        0.7684106  0.7058056
+
+3                        50        0.7302323  0.6566987
+
+3                       100        0.7904723  0.7339340
+
+3                       150        0.8199949  0.7717243
+
+```
+
+```{r,eval=FALSE,echol=TRUE}
+training_predict_gbm <- predict(model_gbm,testing_final)
+training_predict_gbm
+```
+
+[1] A A A A A A A A A A A B B B B B A B C C C C C C D D D C C D E E E A E E E
+
+Levels: A B C D E
+
+```{r,eval=FALSE,echol=TRUE}
+training_cm_gbm <- confusionMatrix(as.factor(testing_final$classe),training_predict_gbm)
+training_cm_gbm
+```
+#### Summary of output
+ Accuracy : 0.8919
+ 
+ 95% CI : (0.7458, 0.9697)
+ 
+ P-Value [Acc > NIR] : 1.275e-11
+ 
+Kappa : 0.8617
+
+**Out of sample error**: 1 - 0.8919 = 0.1081
+
+## Linear Discriminant Analysis (lda) Model, Prediction, and Accuracy
+
+Assess collinearity.
+
+```{r,eval=FALSE,echol=TRUE}
+classeIndex <- which(names(training_final) == "classe")
+correlation_train <- cor(training_final[, -classeIndex])
+```
+
+The only correlation of note is accel_belt_z and accel_arm_y at 0.78694721.
+
+```{r,eval=FALSE,echol=TRUE}
+set.seed(23456)
+model_lda <- train(classe~.,data=training_final, method="lda")
+training_predict_lda <- predict(model_lda,testing_final)
+training_predict_lda}
+```
+
+[1] A E D A A D A B D A A B B B C A A B C C C A A C E D D D D D E C E D B D A
+
+Levels: A B C D E
+
+```{r,eval=FALSE,echol=TRUE}
+training_cm_lda <- confusionMatrix(as.factor(testing_final$classe),training_predict_lda)
+training_cm_lda}
+```
+#### Summary of output
+ Accuracy : 0.5676
+ 
+ 95% CI : (0.3949, 0.729)
+ 
+ P-Value [Acc > NIR] : 0.0005587
+ 
+ Kappa : 0.4529
+ 
+**Out of sample error**: 1 - 0.5676 = 0.4324
+
+## Conclusion
+Accuracy the proportion of correctly classified instances out of the total number of instances.
+
+Kappa measures the agreement between the predicted and actual classifications adjusted for chance.
+
+Out of sample error indicates the error rate when a model is applied to new data that was not used for the training model.
+
+```{r,eval=FALSE,echol=TRUE}
+              Accuracy    Kappa     Out of Sample Error
+randomForest  0.973       0.9657    0.027
+
+gbm           0.8919      0.8617    0.1081
+
+lda           0.5676      0.4529    0.4324
+
+```
+The random forest model provided the highest accuracy, Kappa, and lowest out of sample error. This test is selected for further predictions of the “classe” variable using the accelerometers clean training data.
+
+
